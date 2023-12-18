@@ -16,6 +16,12 @@ export interface UploadOptions {
    * @default 32MB
    */
   uploadChunkSize?: number
+
+  /**
+   * Authorization token to be used for requests, defaults to the
+   * GitHub Actions internal token
+   */
+  token?: string
 }
 
 /**
@@ -68,6 +74,12 @@ export interface DownloadOptions {
    * @default false
    */
   lookupOnly?: boolean
+
+  /**
+   * Authorization token to be used for requests, defaults to the
+   * GitHub Actions internal token
+   */
+  token?: string
 }
 
 /**
@@ -88,6 +100,10 @@ export function getUploadOptions(copy?: UploadOptions): UploadOptions {
 
     if (typeof copy.uploadChunkSize === 'number') {
       result.uploadChunkSize = copy.uploadChunkSize
+    }
+
+    if (typeof copy.token === 'string') {
+      result.token = copy.token
     }
   }
 
@@ -135,6 +151,10 @@ export function getDownloadOptions(copy?: DownloadOptions): DownloadOptions {
 
     if (typeof copy.lookupOnly === 'boolean') {
       result.lookupOnly = copy.lookupOnly
+    }
+
+    if (typeof copy.token === 'string') {
+      result.token = copy.token
     }
   }
   const segmentDownloadTimeoutMins =

@@ -37,6 +37,7 @@ export interface InternalCacheOptions {
   compressionMethod?: CompressionMethod
   enableCrossOsArchive?: boolean
   cacheSize?: number
+  token?: string
 }
 
 export interface ArchiveTool {

@@ -93,7 +93,8 @@ export async function restoreCache(
     // path are needed to compute version
     const cacheEntry = await cacheHttpClient.getCacheEntry(keys, paths, {
       compressionMethod,
-      enableCrossOsArchive
+      enableCrossOsArchive,
+      token: options?.token
     })
     if (!cacheEntry?.archiveLocation) {
       // Cache not found
@@ -217,7 +218,8 @@ export async function saveCache(
       {
         compressionMethod,
         enableCrossOsArchive,
-        cacheSize: archiveFileSize
+        cacheSize: archiveFileSize,
+        token: options?.token
       }
     )
 

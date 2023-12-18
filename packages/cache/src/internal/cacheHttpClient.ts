@@ -64,8 +64,13 @@ function getRequestOptions(): RequestOptions {
   return requestOptions
 }
 
-function createHttpClient(): HttpClient {
-  const token = process.env['ACTIONS_RUNTIME_TOKEN'] || ''
+function createHttpClient(authToken?: string): HttpClient {
+  const token =
+    authToken ||
+    process.env['BUILDLESS_APIKEY'] ||
+    process.env['ACTIONS_RUNTIME_TOKEN'] ||
+    ''
+  
   const bearerCredentialHandler = new BearerCredentialHandler(token)
 
   return new HttpClient(
@@ -104,7 +109,7 @@ export async function getCacheEntry(
   paths: string[],
   options?: InternalCacheOptions
 ): Promise<ArtifactCacheEntry | null> {
-  const httpClient = createHttpClient()
+  const httpClient = createHttpClient(options?.token)
   const version = getCacheVersion(
     paths,
     options?.compressionMethod,
@@ -205,7 +210,7 @@ export async function reserveCache(
   paths: string[],
   options?: InternalCacheOptions
 ): Promise<ITypedResponseWithError<ReserveCacheResponse>> {
-  const httpClient = createHttpClient()
+  const httpClient = createHttpClient(options?.token)
   const version = getCacheVersion(
     paths,
     options?.compressionMethod,
@@ -354,7 +359,7 @@ export async function saveCache(
   archivePath: string,
   options?: UploadOptions
 ): Promise<void> {
-  const httpClient = createHttpClient()
+  const httpClient = createHttpClient(options?.token)
 
   core.debug('Upload cache')
   await uploadFile(httpClient, cacheId, archivePath, options)
