@@ -37,6 +37,7 @@ export interface InternalCacheOptions {
   compressionMethod?: CompressionMethod
   enableCrossOsArchive?: boolean
   cacheSize?: number
+  endpoint?: string
   token?: string
 }
 

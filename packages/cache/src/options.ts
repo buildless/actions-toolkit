@@ -16,7 +16,11 @@ export interface UploadOptions {
    * @default 32MB
    */
   uploadChunkSize?: number
-
+  /**
+   * API endpoint to be used for cache requests, defaults to the
+   * GitHub Actions internal caching API server
+   */
+  endpoint?: string
   /**
    * Authorization token to be used for requests, defaults to the
    * GitHub Actions internal token
@@ -76,6 +80,12 @@ export interface DownloadOptions {
   lookupOnly?: boolean
 
   /**
+   * API endpoint to be used for cache requests, defaults to the
+   * GitHub Actions internal caching API server
+   */
+  endpoint?: string
+
+  /**
    * Authorization token to be used for requests, defaults to the
    * GitHub Actions internal token
    */
@@ -100,6 +110,10 @@ export function getUploadOptions(copy?: UploadOptions): UploadOptions {
 
     if (typeof copy.uploadChunkSize === 'number') {
       result.uploadChunkSize = copy.uploadChunkSize
+    }
+
+    if (typeof copy.endpoint === 'string') {
+      result.endpoint = copy.endpoint
     }
 
     if (typeof copy.token === 'string') {
@@ -151,6 +165,10 @@ export function getDownloadOptions(copy?: DownloadOptions): DownloadOptions {
 
     if (typeof copy.lookupOnly === 'boolean') {
       result.lookupOnly = copy.lookupOnly
+    }
+
+    if (typeof copy.endpoint === 'string') {
+      result.endpoint = copy.endpoint
     }
 
     if (typeof copy.token === 'string') {

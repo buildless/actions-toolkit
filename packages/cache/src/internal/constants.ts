@@ -16,6 +16,9 @@ export enum ArchiveToolType {
   BSD = 'bsd'
 }
 
+// The default endpoint used for cache requests.
+export const DefaultCacheEndpoint = 'https://api.less.build/cache/gha'
+
 // The default number of retry attempts.
 export const DefaultRetryAttempts = 2
 

@@ -10,7 +10,7 @@ import * as fs from 'fs'
 import {URL} from 'url'
 
 import * as utils from './cacheUtils'
-import {CompressionMethod} from './constants'
+import {CompressionMethod, DefaultCacheEndpoint} from './constants'
 import {
   ArtifactCacheEntry,
   InternalCacheOptions,
@@ -39,8 +39,8 @@ import {
 
 const versionSalt = '1.0'
 
-function getCacheApiUrl(resource: string): string {
-  const baseUrl: string = process.env['ACTIONS_CACHE_URL'] || ''
+function getCacheApiUrl(resource: string, endpoint?: string): string {
+  const baseUrl: string = endpoint || DefaultCacheEndpoint
   if (!baseUrl) {
     throw new Error('Cache Service Url not found, unable to restore cache.')
   }
@@ -70,9 +70,7 @@ function createHttpClient(authToken?: string): HttpClient {
     process.env['BUILDLESS_APIKEY'] ||
     process.env['ACTIONS_RUNTIME_TOKEN'] ||
     ''
-  
   const bearerCredentialHandler = new BearerCredentialHandler(token)
-
   return new HttpClient(
     'actions/cache',
     [bearerCredentialHandler],
@@ -120,13 +118,20 @@ export async function getCacheEntry(
   )}&version=${version}`
 
   const response = await retryTypedResponse('getCacheEntry', async () =>
-    httpClient.getJson<ArtifactCacheEntry>(getCacheApiUrl(resource))
+    httpClient.getJson<ArtifactCacheEntry>(
+      getCacheApiUrl(resource, options?.endpoint)
+    )
   )
   // Cache not found
   if (response.statusCode === 204) {
     // List cache for primary key only if cache miss occurs
     if (core.isDebug()) {
-      await printCachesListForDiagnostics(keys[0], httpClient, version)
+      await printCachesListForDiagnostics(
+        keys[0],
+        httpClient,
+        version,
+        options?.endpoint
+      )
     }
     return null
   }
@@ -150,11 +155,12 @@ export async function getCacheEntry(
 async function printCachesListForDiagnostics(
   key: string,
   httpClient: HttpClient,
-  version: string
+  version: string,
+  endpoint?: string
 ): Promise<void> {
   const resource = `caches?key=${encodeURIComponent(key)}`
   const response = await retryTypedResponse('listCache', async () =>
-    httpClient.getJson<ArtifactCacheList>(getCacheApiUrl(resource))
+    httpClient.getJson<ArtifactCacheList>(getCacheApiUrl(resource, endpoint))
   )
   if (response.statusCode === 200) {
     const cacheListResult = response.result
@@ -224,7 +230,7 @@ export async function reserveCache(
   }
   const response = await retryTypedResponse('reserveCache', async () =>
     httpClient.postJson<ReserveCacheResponse>(
-      getCacheApiUrl('caches'),
+      getCacheApiUrl('caches', options?.endpoint),
       reserveCacheRequest
     )
   )
@@ -286,7 +292,10 @@ async function uploadFile(
 ): Promise<void> {
   // Upload Chunks
   const fileSize = utils.getArchiveFileSizeInBytes(archivePath)
-  const resourceUrl = getCacheApiUrl(`caches/${cacheId.toString()}`)
+  const resourceUrl = getCacheApiUrl(
+    `caches/${cacheId.toString()}`,
+    options?.endpoint
+  )
   const fd = fs.openSync(archivePath, 'r')
   const uploadOptions = getUploadOptions(options)
 
@@ -343,12 +352,13 @@ async function uploadFile(
 async function commitCache(
   httpClient: HttpClient,
   cacheId: number,
-  filesize: number
+  filesize: number,
+  endpoint?: string
 ): Promise<TypedResponse<null>> {
   const commitCacheRequest: CommitCacheRequest = {size: filesize}
   return await retryTypedResponse('commitCache', async () =>
     httpClient.postJson<null>(
-      getCacheApiUrl(`caches/${cacheId.toString()}`),
+      getCacheApiUrl(`caches/${cacheId.toString()}`, endpoint),
       commitCacheRequest
     )
   )
@@ -371,7 +381,12 @@ export async function saveCache(
     `Cache Size: ~${Math.round(cacheSize / (1024 * 1024))} MB (${cacheSize} B)`
   )
 
-  const commitCacheResponse = await commitCache(httpClient, cacheId, cacheSize)
+  const commitCacheResponse = await commitCache(
+    httpClient,
+    cacheId,
+    cacheSize,
+    options?.endpoint
+  )
   if (!isSuccessStatusCode(commitCacheResponse.statusCode)) {
     throw new Error(
       `Cache service responded with ${commitCacheResponse.statusCode} during commit cache.`
