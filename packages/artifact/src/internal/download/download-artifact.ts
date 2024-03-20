@@ -1,4 +1,7 @@
 import fs from 'fs/promises'
+import * as stream from 'stream'
+import {createWriteStream} from 'fs'
+import * as path from 'path'
 import * as github from '@actions/github'
 import * as core from '@actions/core'
 import * as httpClient from '@actions/http-client'
@@ -38,20 +41,110 @@ async function exists(path: string): Promise<boolean> {
 }
 
 async function streamExtract(url: string, directory: string): Promise<void> {
+  let retryCount = 0
+  while (retryCount < 5) {
+    try {
+      await streamExtractExternal(url, directory)
+      return
+    } catch (error) {
+      if (error.message.includes('Malformed extraction path')) {
+        throw new Error(
+          `Artifact download failed with unretryable error: ${error.message}`
+        )
+      }
+      retryCount++
+      core.debug(
+        `Failed to download artifact after ${retryCount} retries due to ${error.message}. Retrying in 5 seconds...`
+      )
+      // wait 5 seconds before retrying
+      await new Promise(resolve => setTimeout(resolve, 5000))
+    }
+  }
+
+  throw new Error(`Artifact download failed after ${retryCount} retries.`)
+}
+
+export async function streamExtractExternal(
+  url: string,
+  directory: string
+): Promise<void> {
   const client = new httpClient.HttpClient(getUserAgentString())
   const response = await client.get(url)
-
   if (response.message.statusCode !== 200) {
     throw new Error(
       `Unexpected HTTP response from blob storage: ${response.message.statusCode} ${response.message.statusMessage}`
     )
   }
 
+  const timeout = 30 * 1000 // 30 seconds
+
   return new Promise((resolve, reject) => {
+    const timerFn = (): void => {
+      response.message.destroy(
+        new Error(`Blob storage chunk did not respond in ${timeout}ms`)
+      )
+    }
+    const timer = setTimeout(timerFn, timeout)
+
+    const createdDirectories = new Set<string>()
+    createdDirectories.add(directory)
     response.message
-      .pipe(unzip.Extract({path: directory}))
-      .on('close', resolve)
-      .on('error', reject)
+      .on('data', () => {
+        timer.refresh()
+      })
+      .on('error', (error: Error) => {
+        core.debug(
+          `response.message: Artifact download failed: ${error.message}`
+        )
+        clearTimeout(timer)
+        reject(error)
+      })
+      .pipe(unzip.Parse())
+      .pipe(
+        new stream.Transform({
+          objectMode: true,
+          transform: async (entry, _, callback) => {
+            const fullPath = path.normalize(path.join(directory, entry.path))
+            if (!directory.endsWith(path.sep)) {
+              directory += path.sep
+            }
+            if (!fullPath.startsWith(directory)) {
+              reject(new Error(`Malformed extraction path: ${fullPath}`))
+            }
+
+            if (entry.type === 'Directory') {
+              if (!createdDirectories.has(fullPath)) {
+                createdDirectories.add(fullPath)
+                await resolveOrCreateDirectory(fullPath).then(() => {
+                  entry.autodrain()
+                  callback()
+                })
+              } else {
+                entry.autodrain()
+                callback()
+              }
+            } else {
+              core.info(`Extracting artifact entry: ${fullPath}`)
+              if (!createdDirectories.has(path.dirname(fullPath))) {
+                createdDirectories.add(path.dirname(fullPath))
+                await resolveOrCreateDirectory(path.dirname(fullPath))
+              }
+
+              const writeStream = createWriteStream(fullPath)
+              writeStream.on('finish', callback)
+              writeStream.on('error', reject)
+              entry.pipe(writeStream)
+            }
+          }
+        })
+      )
+      .on('finish', async () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      .on('error', (error: Error) => {
+        reject(error)
+      })
   })
 }
 
